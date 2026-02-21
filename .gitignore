@@ -1,0 +1,7 @@
+# Never upload the database to GitHub
+*.db
+*.sqlite
+
+# Ignore OS-generated files
+.DS_Store
+Thumbs.db
