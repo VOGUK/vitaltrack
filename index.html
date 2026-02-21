@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light" data-text-size="normal">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <title>VitalTrack</title>
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1D4ED8">
+    <link rel="icon" href="VitalTrack-Logo.png">
+
+    <link rel="apple-touch-icon" href="VitalTrack-Logo.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="VitalTrack">
+
+    <link rel="stylesheet" href="styles.css">
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+
+<body>
+
+    <div id="customModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 id="modalTitle">Notice</h3>
+            <p id="modalMessage"></p>
+            <button onclick="closeModal()" class="btn-primary">OK</button>
+        </div>
+    </div>
+
+    <div id="loginScreen" class="screen">
+        <div class="login-container">
+            <img src="VitalTrack-Logo.png" alt="VitalTrack Logo" class="login-logo">
+            <h2>Welcome to VitalTrack</h2>
+            <div class="input-group">
+                <input type="text" id="username" placeholder="Username">
+            </div>
+            <div class="input-group pass-group">
+                <input type="password" id="password" placeholder="Password">
+                <i class="ph ph-eye" id="togglePass" onclick="togglePassword()"></i>
+            </div>
+            <button onclick="login()" class="btn-primary">Login</button>
+        </div>
+    </div>
+
+    <div id="mainApp" class="screen hidden">
+        <nav class="top-nav">
+            <div class="nav-left">
+                <img src="VitalTrack-Logo.png" alt="Logo">
+                <span>VitalTrack</span>
+            </div>
+            <div class="nav-center">
+                <button onclick="navigate('dashboard')">Dashboard</button>
+                <button onclick="navigate('entry')">New Entry</button>
+                <button onclick="navigate('history')">History</button>
+                <button onclick="navigate('report')">Reports</button>
+                <button onclick="navigate('settings')">Settings</button>
+            </div>
+            <div class="nav-right">
+                <i class="ph ph-minus-circle" onclick="changeTextSize('down')" title="Decrease Text Size"></i>
+                <i class="ph ph-plus-circle" onclick="changeTextSize('up')" title="Increase Text Size"></i>
+                <i class="ph ph-sun" id="themeIcon" onclick="toggleTheme()" title="Toggle Dark/Light Mode"></i>
+                <i class="ph ph-sign-out" onclick="logout()" title="Logout"></i>
+            </div>
+        </nav>
+
+        <main id="appContent">
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

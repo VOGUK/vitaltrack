@@ -1,0 +1,5 @@
+# Block public access to SQLite database files
+<Files ~ "\.(db|sqlite)$">
+    Order allow,deny
+    Deny from all
+</Files>

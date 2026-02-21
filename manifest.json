@@ -1,0 +1,21 @@
+{
+    "name": "VitalTrack",
+    "short_name": "VitalTrack",
+    "description": "Blood pressure, pulse, and oxygen tracker.",
+    "start_url": "index.html",
+    "display": "standalone",
+    "background_color": "#1D4ED8",
+    "theme_color": "#1D4ED8",
+    "icons": [
+        {
+            "src": "VitalTrack-Logo.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "VitalTrack-Logo.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
