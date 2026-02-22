@@ -172,21 +172,19 @@ function navigate(view, params = {}) {
     const content = document.getElementById('appContent');
     content.innerHTML = ''; 
 
-    // Updated Active Menu Styling (Light background and forcefully resetting any old underlines)
+    // Forcefully remove any underlines using !important to override mobile browser defaults
     document.querySelectorAll('.nav-center button').forEach(btn => {
         if (btn.getAttribute('onclick').includes(`('${view}'`)) {
             btn.style.backgroundColor = 'rgba(128, 128, 128, 0.2)';
             btn.style.borderRadius = '8px';
-            btn.style.textDecoration = 'none';
-            btn.style.textUnderlineOffset = '0';
-            btn.style.textDecorationThickness = '0';
+            btn.style.setProperty('text-decoration', 'none', 'important');
+            btn.style.borderBottom = 'none';
             btn.style.fontWeight = 'bold';
             btn.style.opacity = '1';
         } else {
             btn.style.backgroundColor = 'transparent';
-            btn.style.textDecoration = 'none';
-            btn.style.textUnderlineOffset = '0';
-            btn.style.textDecorationThickness = '0';
+            btn.style.setProperty('text-decoration', 'none', 'important');
+            btn.style.borderBottom = 'none';
             btn.style.fontWeight = 'normal';
             btn.style.opacity = '0.7';
         }
