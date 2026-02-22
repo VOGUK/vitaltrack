@@ -172,17 +172,21 @@ function navigate(view, params = {}) {
     const content = document.getElementById('appContent');
     content.innerHTML = ''; 
 
-    // Updated Active Menu Styling (Light background instead of underline)
+    // Updated Active Menu Styling (Light background and forcefully resetting any old underlines)
     document.querySelectorAll('.nav-center button').forEach(btn => {
         if (btn.getAttribute('onclick').includes(`('${view}'`)) {
             btn.style.backgroundColor = 'rgba(128, 128, 128, 0.2)';
             btn.style.borderRadius = '8px';
             btn.style.textDecoration = 'none';
+            btn.style.textUnderlineOffset = '0';
+            btn.style.textDecorationThickness = '0';
             btn.style.fontWeight = 'bold';
             btn.style.opacity = '1';
         } else {
             btn.style.backgroundColor = 'transparent';
             btn.style.textDecoration = 'none';
+            btn.style.textUnderlineOffset = '0';
+            btn.style.textDecorationThickness = '0';
             btn.style.fontWeight = 'normal';
             btn.style.opacity = '0.7';
         }
@@ -272,6 +276,7 @@ function renderDashboard(container) {
     }
     recentTableHtml += `</tbody></table></div>`;
     
+    // Updated Quick Actions to just be one "Record New Entry" button as Period has been removed
     container.innerHTML += `<div class="dashboard-grid"><div class="card card-full"><h3>Seven Day Averages</h3><div class="dashboard-averages-wrapper"><div class="card ${bpStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Blood Pressure</h4>${bpHtml}</div><div class="card ${pulseStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Pulse Rate</h4>${pulseHtml}</div><div class="card ${oxyStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Oxygen Level</h4>${oxyHtml}</div></div></div><div class="card"><h3>Quick Actions</h3><button class="btn-primary" ${actionDisabled} onclick="navigate('entry')">Record New Entry</button></div><div class="card" style="padding-bottom: 15px;"><h3>Readings From Past 24 Hours</h3>${recentTableHtml}</div></div>`;
 }
 
