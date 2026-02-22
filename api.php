@@ -1,11 +1,12 @@
 <?php
-// api.php
+// Hide minor warnings/errors from breaking the JSON output
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+ini_set('display_errors', 0);
 
-// 1. Initialize Secure Server-Side Sessions
-session_start([
-    'cookie_httponly' => true, // Prevents JavaScript from accessing the session cookie
-    'cookie_samesite' => 'Strict', // Prevents Cross-Site Request Forgery (CSRF)
-]);
+// Universally compatible session start
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_samesite', 'Strict');
+session_start();
 
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
@@ -22,15 +23,14 @@ if ($is_new_db) {
     $pdo->exec("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, role TEXT, name TEXT, dob TEXT, share_code TEXT)");
     $pdo->exec("CREATE TABLE readings (id INTEGER PRIMARY KEY, user_id INTEGER, date TEXT, time TEXT, period TEXT, sys INTEGER, dia INTEGER, pulse INTEGER, oxygen INTEGER, notes TEXT)");
     
-    // Create default admin account
     $default_pass = password_hash('admin123', PASSWORD_DEFAULT);
     $pdo->exec("INSERT INTO users (username, password, role, name) VALUES ('admin', '$default_pass', 'admin', 'System Admin')");
 }
 
 $action = $_GET['action'] ?? '';
 $data = json_decode(file_get_contents("php://input"), true);
+if (!$data) $data = []; // Prevent null errors
 
-// Security Middleware: Check if logged in
 function requireAuth() {
     if (!isset($_SESSION['user_id'])) {
         echo json_encode(['success' => false, 'message' => 'Unauthorized session. Please log in again.']);
@@ -38,7 +38,6 @@ function requireAuth() {
     }
 }
 
-// Security Middleware: Check if Admin
 function requireAdmin() {
     requireAuth();
     if ($_SESSION['role'] !== 'admin') {
@@ -50,26 +49,31 @@ function requireAdmin() {
 try {
     // --- 1. Authentication ---
     if ($action == 'login') {
+        $username = $data['username'] ?? '';
+        $password = $data['password'] ?? '';
+        
         $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
-        $stmt->execute([$data['username']]);
+        $stmt->execute([$username]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        if ($user && password_verify($data['password'], $user['password'])) {
-            // Prevent Session Fixation Attacks
+        if ($user && password_verify($password, $user['password'])) {
             session_regenerate_id(true); 
             
-            // Store credentials securely on the server
+            // Handle "Stay signed in"
+            if (isset($data['remember']) && $data['remember'] == true) {
+                setcookie(session_name(), session_id(), time() + (30 * 24 * 60 * 60), "/");
+            }
+            
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role'] = $user['role'];
             
-            unset($user['password']); // Keep passwords secure by not sending them back
+            unset($user['password']); 
             echo json_encode(['success' => true, 'user' => $user]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Incorrect username or password.']);
         }
     } 
     elseif ($action == 'check_auth') {
-        // Validates returning users securely
         if (isset($_SESSION['user_id'])) {
             $stmt = $pdo->prepare("SELECT id, username, role, name, dob, share_code FROM users WHERE id = ?");
             $stmt->execute([$_SESSION['user_id']]);
@@ -85,10 +89,11 @@ try {
     }
     elseif ($action == 'logout') {
         session_destroy();
+        setcookie(session_name(), '', time() - 3600, "/"); 
         echo json_encode(['success' => true]);
     }
     
-    // --- 2. Readings Management (Secured with Server Sessions) ---
+    // --- 2. Readings Management ---
     elseif ($action == 'save_reading') {
         requireAuth();
         $stmt = $pdo->prepare("INSERT INTO readings (user_id, date, time, period, sys, dia, pulse, oxygen, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -114,7 +119,7 @@ try {
         echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
 
-    // --- 3. Profile & Sharing (Secured with Server Sessions) ---
+    // --- 3. Profile & Sharing ---
     elseif ($action == 'update_profile') {
         requireAuth();
         $stmt = $pdo->prepare("UPDATE users SET name = ?, dob = ? WHERE id = ?");
@@ -143,7 +148,7 @@ try {
         }
     }
 
-    // --- 4. Backup & Restore (Secured with Server Sessions) ---
+    // --- 4. Backup & Restore ---
     elseif ($action == 'backup_data') {
         requireAuth();
         $stmt = $pdo->prepare("SELECT * FROM readings WHERE user_id = ?");
@@ -162,9 +167,9 @@ try {
         echo json_encode(['success' => true]);
     }
 
-    // --- 5. Admin Panel Logic (Secured with Server Middleware) ---
+    // --- 5. Admin Panel Logic ---
     elseif ($action == 'admin_action') {
-        requireAdmin(); // Rejects request immediately if not admin
+        requireAdmin(); 
 
         $task = $data['task'];
         if ($task == 'get_users') {
