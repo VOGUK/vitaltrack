@@ -193,7 +193,7 @@ function navigate(view, params = {}) {
         content.appendChild(banner);
     }
     if (view === 'dashboard') renderDashboard(content);
-    else if (view === 'entry') renderEntry(content, params.editId, params.period);
+    else if (view === 'entry') renderEntry(content, params.editId);
     else if (view === 'history') renderHistory(content);
     else if (view === 'report') renderReport(content);
     else if (view === 'settings') renderSettings(content);
@@ -270,13 +270,14 @@ function renderDashboard(container) {
     }
     recentTableHtml += `</tbody></table></div>`;
     
-    container.innerHTML += `<div class="dashboard-grid"><div class="card card-full"><h3>Seven Day Averages</h3><div class="dashboard-averages-wrapper"><div class="card ${bpStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Blood Pressure</h4>${bpHtml}</div><div class="card ${pulseStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Pulse Rate</h4>${pulseHtml}</div><div class="card ${oxyStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Oxygen Level</h4>${oxyHtml}</div></div></div><div class="card"><h3>Quick Actions</h3><button class="btn-primary" ${actionDisabled} onclick="navigate('entry', {period: 'Morning'})">Record Morning</button><button class="btn-primary" ${actionDisabled} onclick="navigate('entry', {period: 'Evening'})">Record Evening</button><button class="btn-primary" ${actionDisabled} style="background: var(--text-muted); margin-bottom: 0;" onclick="navigate('entry', {period: 'Unknown'})">Record Daily</button></div><div class="card" style="padding-bottom: 15px;"><h3>Readings From Past 24 Hours</h3>${recentTableHtml}</div></div>`;
+    // Updated Quick Actions to just be one "Record New Entry" button as Period has been removed
+    container.innerHTML += `<div class="dashboard-grid"><div class="card card-full"><h3>Seven Day Averages</h3><div class="dashboard-averages-wrapper"><div class="card ${bpStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Blood Pressure</h4>${bpHtml}</div><div class="card ${pulseStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Pulse Rate</h4>${pulseHtml}</div><div class="card ${oxyStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Oxygen Level</h4>${oxyHtml}</div></div></div><div class="card"><h3>Quick Actions</h3><button class="btn-primary" ${actionDisabled} onclick="navigate('entry')">Record New Entry</button></div><div class="card" style="padding-bottom: 15px;"><h3>Readings From Past 24 Hours</h3>${recentTableHtml}</div></div>`;
 }
 
-function renderEntry(container, editId = null, defaultPeriod = 'Unknown') {
+function renderEntry(container, editId = null) {
     if(viewingSharedProfile) { container.innerHTML = "<h3>Cannot edit shared data.</h3>"; return; }
     editingReadingId = editId;
-    let r = { date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().slice(0,5), period: defaultPeriod, sys:'', dia:'', pulse:'', oxygen:'', notes:'' };
+    let r = { date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().slice(0,5), sys:'', dia:'', pulse:'', oxygen:'', notes:'' };
     if (editId) { const found = currentReadings.find(x => x.id == editId); if(found) r = found; }
     
     container.innerHTML = `
@@ -284,12 +285,6 @@ function renderEntry(container, editId = null, defaultPeriod = 'Unknown') {
             <h3>${editId ? 'Edit Entry' : 'New Entry'}</h3>
             <label>Date</label> <input type="date" id="entryDate" value="${escapeHTML(r.date)}">
             <label>Time</label> <input type="time" id="entryTime" value="${escapeHTML(r.time)}">
-            <label>Period</label>
-            <select id="entryPeriod">
-                <option value="Morning" ${r.period === 'Morning' ? 'selected' : ''}>Morning</option>
-                <option value="Evening" ${r.period === 'Evening' ? 'selected' : ''}>Evening</option>
-                <option value="Unknown" ${r.period === 'Unknown' ? 'selected' : ''}>Unknown</option>
-            </select>
             
             <label>Recording Type</label>
             <select id="entryType" onchange="toggleInputs()" style="margin-bottom: 25px;">
@@ -349,7 +344,8 @@ function renderEntry(container, editId = null, defaultPeriod = 'Unknown') {
 }
 
 async function saveEntry() {
-    const payload = { reading_id: editingReadingId, date: document.getElementById('entryDate').value, time: document.getElementById('entryTime').value, period: document.getElementById('entryPeriod').value, sys: document.getElementById('sys')?.value || null, dia: document.getElementById('dia')?.value || null, pulse: document.getElementById('pulse')?.value || null, oxygen: document.getElementById('oxy')?.value || null, notes: document.getElementById('notes').value };
+    // Blank string sent for period to remain backwards-compatible with API
+    const payload = { reading_id: editingReadingId, date: document.getElementById('entryDate').value, time: document.getElementById('entryTime').value, period: '', sys: document.getElementById('sys')?.value || null, dia: document.getElementById('dia')?.value || null, pulse: document.getElementById('pulse')?.value || null, oxygen: document.getElementById('oxy')?.value || null, notes: document.getElementById('notes').value };
     const action = editingReadingId ? 'update_reading' : 'save_reading';
     const res = await apiCall(action, payload);
     if(res.success) { 
@@ -383,7 +379,8 @@ async function deleteEntry(id) {
 
 function renderHistory(container) {
     const today = new Date(); const threeMonthsAgo = new Date(); threeMonthsAgo.setMonth(today.getMonth() - 3);
-    container.innerHTML += `<div class="card"><h3>Historical Graph</h3><div style="display:flex; gap:10px; margin-bottom: 20px; flex-wrap: wrap;"><div style="flex:1"><label>Start Date</label><input type="date" id="histStart" value="${threeMonthsAgo.toISOString().split('T')[0]}" onchange="updateHistoryView()"></div><div style="flex:1"><label>End Date</label><input type="date" id="histEnd" value="${today.toISOString().split('T')[0]}" onchange="updateHistoryView()"></div></div><canvas id="historyChart" style="width:100%; max-height: 350px;"></canvas></div><div class="card"><h3>Historical Results</h3><div style="overflow-x: auto;"><table class="admin-table"><thead><tr><th>Date</th><th>BP</th><th>Pulse</th><th>Oxygen</th>${!viewingSharedProfile ? '<th>Actions</th>' : ''}</tr></thead><tbody id="historyTableBody"></tbody></table></div></div>`;
+    // Added <th>Notes</th>
+    container.innerHTML += `<div class="card"><h3>Historical Graph</h3><div style="display:flex; gap:10px; margin-bottom: 20px; flex-wrap: wrap;"><div style="flex:1"><label>Start Date</label><input type="date" id="histStart" value="${threeMonthsAgo.toISOString().split('T')[0]}" onchange="updateHistoryView()"></div><div style="flex:1"><label>End Date</label><input type="date" id="histEnd" value="${today.toISOString().split('T')[0]}" onchange="updateHistoryView()"></div></div><canvas id="historyChart" style="width:100%; max-height: 350px;"></canvas></div><div class="card"><h3>Historical Results</h3><div style="overflow-x: auto;"><table class="admin-table"><thead><tr><th>Date</th><th>BP</th><th>Pulse</th><th>Oxygen</th><th>Notes</th>${!viewingSharedProfile ? '<th>Actions</th>' : ''}</tr></thead><tbody id="historyTableBody"></tbody></table></div></div>`;
     updateHistoryView();
 }
 
@@ -391,12 +388,18 @@ function updateHistoryView() {
     const startStr = document.getElementById('histStart').value; const endStr = document.getElementById('histEnd').value;
     const filtered = currentReadings.filter(r => { return (!startStr || r.date >= startStr) && (!endStr || r.date <= endStr); }).reverse(); 
     const tbody = document.getElementById('historyTableBody'); tbody.innerHTML = '';
-    if(filtered.length === 0) tbody.innerHTML = `<tr><td colspan="5">No readings found for this period.</td></tr>`;
+    
+    // Adjusted colspan to 6 to account for the new Notes column
+    if(filtered.length === 0) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">No readings found for this period.</td></tr>`;
+    
     [...filtered].reverse().forEach(r => {
         const bp = getBPStatus(r.sys, r.dia); const pu = getPulseStatus(r.pulse); const ox = getOxygenStatus(r.oxygen);
         const actionHtml = !viewingSharedProfile ? `<td><button class="btn-primary" onclick="navigate('entry', {editId: ${escapeHTML(r.id)}})" style="padding: 6px 12px; font-size: 0.9rem; width: auto; margin-right: 5px; margin-bottom: 5px; display: inline-block;">Edit</button><button class="btn-primary" onclick="deleteEntry(${escapeHTML(r.id)})" style="padding: 6px 12px; font-size: 0.9rem; width: auto; margin-bottom: 5px; display: inline-block; background-color: var(--status-very-high); box-shadow: none;">Delete</button></td>` : '';
-        tbody.innerHTML += `<tr><td>${formatDate(r.date)}<br><small>${escapeHTML(r.time)}</small></td><td>${r.sys ? `${escapeHTML(r.sys)}/${escapeHTML(r.dia)} <br><span class="${bp.class}">(${bp.text})</span>` : '-'}</td><td>${r.pulse ? `${escapeHTML(r.pulse)} <br><span class="${pu.class}">(${pu.text})</span>` : '-'}</td><td>${r.oxygen ? `${escapeHTML(r.oxygen)}% <br><span class="${ox.class}">(${ox.text})</span>` : '-'}</td>${actionHtml}</tr>`;
+        
+        // Added Notes Cell
+        tbody.innerHTML += `<tr><td>${formatDate(r.date)}<br><small>${escapeHTML(r.time)}</small></td><td>${r.sys ? `${escapeHTML(r.sys)}/${escapeHTML(r.dia)} <br><span class="${bp.class}">(${bp.text})</span>` : '-'}</td><td>${r.pulse ? `${escapeHTML(r.pulse)} <br><span class="${pu.class}">(${pu.text})</span>` : '-'}</td><td>${r.oxygen ? `${escapeHTML(r.oxygen)}% <br><span class="${ox.class}">(${ox.text})</span>` : '-'}</td><td>${escapeHTML(r.notes) || '-'}</td>${actionHtml}</tr>`;
     });
+    
     if(historyChartInstance) historyChartInstance.destroy();
     const ctx = document.getElementById('historyChart').getContext('2d');
     historyChartInstance = new Chart(ctx, { type: 'line', data: { labels: filtered.map(r => formatDate(r.date)), datasets: [{ label: 'Systolic', data: filtered.map(r => r.sys), borderColor: '#ef4444', tension: 0.1, spanGaps: true }, { label: 'Diastolic', data: filtered.map(r => r.dia), borderColor: '#f87171', tension: 0.1, spanGaps: true }, { label: 'Pulse', data: filtered.map(r => r.pulse), borderColor: '#16a34a', tension: 0.1, spanGaps: true }, { label: 'Oxygen', data: filtered.map(r => r.oxygen), borderColor: '#3b82f6', tension: 0.1, spanGaps: true }] }, options: { responsive: true, maintainAspectRatio: false } });
@@ -466,16 +469,56 @@ function generatePDF() {
         const chartImg = document.getElementById('pdfHiddenChart').toDataURL("image/png", 1.0); const { jsPDF } = window.jspdf; const doc = new jsPDF();
         doc.setFontSize(16); doc.text("Patient Report", 14, 20); doc.setFontSize(10); doc.text(`Name: ${patientName}`, 14, 30); doc.text(`Date of Birth: ${patientDob}`, 14, 35);
         doc.addImage(chartImg, 'PNG', 14, 45, 180, 80);
-        const tableHead = [['Date', 'Time']]; if(incBP) tableHead[0].push('Blood Pressure'); if(incPulse) tableHead[0].push('Pulse'); if(incOxy) tableHead[0].push('Oxygen');
+        
+        // Appended Notes column header dynamically
+        const tableHead = [['Date', 'Time']]; 
+        if(incBP) tableHead[0].push('Blood Pressure'); 
+        if(incPulse) tableHead[0].push('Pulse'); 
+        if(incOxy) tableHead[0].push('Oxygen');
+        tableHead[0].push('Notes');
+
         const tableBody = [...filtered].reverse().map(r => {
             const row = [formatDate(r.date), r.time];
             if(incBP) { const s = getBPStatus(r.sys, r.dia); row.push(r.sys ? `${r.sys}/${r.dia}\n(${s.text})` : '-'); }
             if(incPulse) { const s = getPulseStatus(r.pulse); row.push(r.pulse ? `${r.pulse}\n(${s.text})` : '-'); }
             if(incOxy) { const s = getOxygenStatus(r.oxygen); row.push(r.oxygen ? `${r.oxygen}%\n(${s.text})` : '-'); }
+            // Appended Notes info per row dynamically
+            row.push(r.notes ? r.notes : '-');
             return row;
         });
         
-        doc.autoTable({ startY: 135, head: tableHead, body: tableBody, styles: { fontSize: 9, halign: 'center' }, headStyles: { fillColor: [29, 78, 216] }, didParseCell: function(data) { if(data.section === 'body' && data.column.index > 1) { data.cell.customText = data.cell.raw; const lines = String(data.cell.customText).split('\n'); data.cell.text = lines.map(() => ''); } }, didDrawCell: function(data) { if(data.section === 'body' && data.column.index > 1 && data.cell.customText) { const raw = String(data.cell.customText); const centerY = data.cell.y + (data.cell.height / 2); const centerX = data.cell.x + (data.cell.width / 2); if(raw !== '-') { const parts = raw.split('\n'); const val = parts[0]; const stat = parts[1] || ''; doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40); doc.text(val, centerX, centerY - 2.5, { align: 'center', baseline: 'middle' }); if (stat.includes('(Very High)') || stat.includes('(Very Low)')) { doc.setTextColor(153, 27, 27); doc.setFont("helvetica", "bold"); } else if (stat.includes('(High)') || stat.includes('(Low)')) { doc.setTextColor(220, 38, 38); doc.setFont("helvetica", "bold"); } else if (stat.includes('(Good)')) { doc.setTextColor(22, 163, 74); doc.setFont("helvetica", "bold"); } else { doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal"); } if(stat) doc.text(stat, centerX, centerY + 2.5, { align: 'center', baseline: 'middle' }); } else { doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40); doc.text('-', centerX, centerY, { align: 'center', baseline: 'middle' }); } } } });
+        doc.autoTable({ 
+            startY: 135, head: tableHead, body: tableBody, styles: { fontSize: 9, halign: 'center' }, headStyles: { fillColor: [29, 78, 216] }, 
+            didParseCell: function(data) { 
+                if(data.section === 'body' && data.column.index > 1) { 
+                    const rawStr = String(data.cell.raw);
+                    // Isolate Status Formatting strictly to vital signs (ignores the Notes column)
+                    if(rawStr.includes('\n(')) {
+                        data.cell.customText = rawStr; 
+                        const lines = rawStr.split('\n'); 
+                        data.cell.text = lines.map(() => ''); 
+                    }
+                } 
+            }, 
+            didDrawCell: function(data) { 
+                if(data.section === 'body' && data.cell.customText) { 
+                    const raw = String(data.cell.customText); 
+                    const centerY = data.cell.y + (data.cell.height / 2); 
+                    const centerX = data.cell.x + (data.cell.width / 2); 
+                    if(raw !== '-') { 
+                        const parts = raw.split('\n'); const val = parts[0]; const stat = parts[1] || ''; 
+                        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40); doc.text(val, centerX, centerY - 2.5, { align: 'center', baseline: 'middle' }); 
+                        if (stat.includes('(Very High)') || stat.includes('(Very Low)')) { doc.setTextColor(153, 27, 27); doc.setFont("helvetica", "bold"); } 
+                        else if (stat.includes('(High)') || stat.includes('(Low)')) { doc.setTextColor(220, 38, 38); doc.setFont("helvetica", "bold"); } 
+                        else if (stat.includes('(Good)')) { doc.setTextColor(22, 163, 74); doc.setFont("helvetica", "bold"); } 
+                        else { doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal"); } 
+                        if(stat) doc.text(stat, centerX, centerY + 2.5, { align: 'center', baseline: 'middle' }); 
+                    } else { 
+                        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40); doc.text('-', centerX, centerY, { align: 'center', baseline: 'middle' }); 
+                    } 
+                } 
+            } 
+        });
         
         let finalY = doc.lastAutoTable.finalY + 15;
         if (finalY > doc.internal.pageSize.height - 60) { doc.addPage(); finalY = 20; }
@@ -514,7 +557,7 @@ function generateCSV() {
     if (currentReadings.length === 0) return showModal('Notice', 'No data to export.');
     let csvContent = "Date,Time,Period,Systolic,Diastolic,Pulse,Oxygen,Notes\n";
     const escapeCSV = (str) => { let clean = escapeHTML(str); if (clean && /^[=\+\-@]/.test(clean)) clean = "'" + clean; return clean; };
-    currentReadings.forEach(r => { csvContent += `${formatDate(r.date)},${escapeHTML(r.time)},${escapeHTML(r.period)},${escapeHTML(r.sys||'')},${escapeHTML(r.dia||'')},${escapeHTML(r.pulse||'')},${escapeHTML(r.oxygen||'')},"${escapeCSV(r.notes||'')}"\n`; });
+    currentReadings.forEach(r => { csvContent += `${formatDate(r.date)},${escapeHTML(r.time)},${escapeHTML(r.period||'')},${escapeHTML(r.sys||'')},${escapeHTML(r.dia||'')},${escapeHTML(r.pulse||'')},${escapeHTML(r.oxygen||'')},"${escapeCSV(r.notes||'')}"\n`; });
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `VitalTrack_Data_${new Date().toISOString().split('T')[0]}.csv`; link.style.display = "none"; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 }
 
