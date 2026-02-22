@@ -293,7 +293,7 @@ function renderEntry(container, editId = null) {
                 <option value="oxy_pulse">Oxygen and Pulse</option>
             </select>
             
-            <button type="button" class="btn-primary" style="background: var(--text-muted); padding: 8px; font-size: 0.85em; margin-bottom: 20px; width: auto;" onclick="document.getElementById('avgPanel').classList.toggle('hidden')">Calculate Average from 3 Readings</button>
+            <button type="button" class="btn-primary" style="background: var(--text-muted); padding: 10px; font-size: 0.9em; margin-bottom: 20px; display: block; width: 100%; box-sizing: border-box;" onclick="document.getElementById('avgPanel').classList.toggle('hidden')">Calculate Average from Three Readings</button>
             
             <div id="avgPanel" class="hidden" style="background: rgba(0,0,0,0.03); border: 1px dashed var(--text-muted); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                 <h4 style="margin-bottom: 5px;">Average Calculator</h4>
