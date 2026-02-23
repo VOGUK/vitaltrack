@@ -20,11 +20,19 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // Auto-install database tables
 if ($is_new_db) {
-    $pdo->exec("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, role TEXT, name TEXT, dob TEXT, share_code TEXT)");
+    // Added 'email TEXT' to the users table creation
+    $pdo->exec("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, role TEXT, name TEXT, dob TEXT, email TEXT, share_code TEXT)");
     $pdo->exec("CREATE TABLE readings (id INTEGER PRIMARY KEY, user_id INTEGER, date TEXT, time TEXT, period TEXT, sys INTEGER, dia INTEGER, pulse INTEGER, oxygen INTEGER, notes TEXT)");
     
     $default_pass = password_hash('admin123', PASSWORD_DEFAULT);
     $pdo->exec("INSERT INTO users (username, password, role, name) VALUES ('admin', '$default_pass', 'admin', 'System Admin')");
+} else {
+    // Safe migration: Add 'email' column to existing databases automatically
+    try {
+        $pdo->exec("ALTER TABLE users ADD COLUMN email TEXT");
+    } catch (PDOException $e) {
+        // If the column already exists, SQLite throws an error. We silently ignore it.
+    }
 }
 
 $action = $_GET['action'] ?? '';
@@ -75,7 +83,8 @@ try {
     } 
     elseif ($action == 'check_auth') {
         if (isset($_SESSION['user_id'])) {
-            $stmt = $pdo->prepare("SELECT id, username, role, name, dob, share_code FROM users WHERE id = ?");
+            // Added 'email' to the returned fields
+            $stmt = $pdo->prepare("SELECT id, username, role, name, dob, email, share_code FROM users WHERE id = ?");
             $stmt->execute([$_SESSION['user_id']]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             if($user) {
@@ -122,8 +131,9 @@ try {
     // --- 3. Profile & Sharing ---
     elseif ($action == 'update_profile') {
         requireAuth();
-        $stmt = $pdo->prepare("UPDATE users SET name = ?, dob = ? WHERE id = ?");
-        $stmt->execute([$data['name'], $data['dob'], $_SESSION['user_id']]);
+        // Added email to the update statement
+        $stmt = $pdo->prepare("UPDATE users SET name = ?, dob = ?, email = ? WHERE id = ?");
+        $stmt->execute([$data['name'], $data['dob'], $data['email'], $_SESSION['user_id']]);
         echo json_encode(['success' => true]);
     }
     elseif ($action == 'generate_share_code') {
@@ -135,7 +145,8 @@ try {
     }
     elseif ($action == 'get_shared_data') {
         requireAuth();
-        $stmt = $pdo->prepare("SELECT id, name, dob FROM users WHERE share_code = ?");
+        // Added email so the frontend knows the shared user's email too
+        $stmt = $pdo->prepare("SELECT id, name, dob, email FROM users WHERE share_code = ?");
         $stmt->execute([$data['share_code']]);
         $shared_user = $stmt->fetch(PDO::FETCH_ASSOC);
         
@@ -194,6 +205,60 @@ try {
             $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
             $stmt->execute([$hash, $data['target_user_id']]);
             echo json_encode(['success' => true]);
+        }
+    }
+
+    // --- 6. Send PDF via Email ---
+    elseif ($action == 'email_report') {
+        requireAuth();
+        
+        $pdf_data = $data['pdf_data'] ?? '';
+        if (empty($pdf_data)) {
+            echo json_encode(['success' => false, 'message' => 'No PDF data received.']);
+            exit;
+        }
+
+        // Retrieve the logged-in user's email and name
+        $stmt = $pdo->prepare("SELECT email, name FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (empty($user['email'])) {
+            echo json_encode(['success' => false, 'message' => 'No email address found. Please update your profile settings.']);
+            exit;
+        }
+
+        // Clean and decode the base64 string
+        $pdf_decoded = base64_decode(preg_replace('#^data:application/\w+;base64,#i', '', $pdf_data));
+
+        // Ensure PHPMailer files exist before attempting to load them
+        if (!file_exists(__DIR__ . '/PHPMailer/src/PHPMailer.php') || !file_exists(__DIR__ . '/PHPMailer/src/Exception.php')) {
+            echo json_encode(['success' => false, 'message' => 'PHPMailer library is missing. Please upload the PHPMailer folder to your server.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/PHPMailer/src/Exception.php';
+        require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
+
+        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+
+        try {
+            // Using the native PHP mail() engine automatically
+            $host = $_SERVER['HTTP_HOST'] ?? 'vitaltrack.local';
+            $mail->setFrom('no-reply@' . $host, 'VitalTrack App');
+            $mail->addAddress($user['email'], $user['name']);
+            
+            $mail->Subject = 'Your Health Report';
+            $mail->Body    = "Hello,\n\nPlease find your generated health report attached to this email.\n\nNote: This is an automated email.\n\nBest regards,\nVitalTrack App";
+            
+            // Attach the PDF from memory
+            $mail->addStringAttachment($pdf_decoded, 'Patient_Report.pdf', 'base64', 'application/pdf');
+
+            $mail->send();
+            echo json_encode(['success' => true]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to send email. Mailer Error: ' . $mail->ErrorInfo]);
         }
     }
 
