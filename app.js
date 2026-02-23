@@ -227,13 +227,11 @@ function renderDashboard(container) {
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
     
-    // 1. Array for 7 Day Averages (Top Card)
     const sevenDaysRecent = currentReadings.filter(r => {
         const rDate = new Date(`${r.date}T${r.time}`);
         return rDate >= sevenDaysAgo;
     });
 
-    // 2. Array for 24 Hours List (Bottom Card)
     const twentyFourHoursRecent = currentReadings.filter(r => {
         const rDate = new Date(`${r.date}T${r.time}`);
         return rDate >= twentyFourHoursAgo;
@@ -241,7 +239,6 @@ function renderDashboard(container) {
     
     let avgSys = 0, avgDia = 0, avgPulse = 0, avgOxy = 0, bpCount = 0, pCount = 0, oCount = 0;
     
-    // Calculate averages based ONLY on the 7 Day Data
     sevenDaysRecent.forEach(r => {
         if(r.sys && r.dia) { avgSys += parseInt(r.sys); avgDia += parseInt(r.dia); bpCount++; }
         if(r.pulse) { avgPulse += parseInt(r.pulse); pCount++; }
@@ -262,7 +259,6 @@ function renderDashboard(container) {
     
     const actionDisabled = viewingSharedProfile ? 'disabled style="opacity:0.5"' : '';
     
-    // Generate Table based ONLY on the 24 Hour Data
     let recentTableHtml = `<div style="overflow-x: auto;"><table class="admin-table" style="font-size:0.9em; margin-bottom: 0;"><thead><tr><th>Date</th><th>BP</th><th>Pulse</th><th>Oxygen</th></tr></thead><tbody>`;
     if (twentyFourHoursRecent.length === 0) { 
         recentTableHtml += `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding: 20px;">No data in the past 24 hours</td></tr>`; 
@@ -274,7 +270,6 @@ function renderDashboard(container) {
     }
     recentTableHtml += `</tbody></table></div>`;
     
-    // Updated Quick Actions to just be one "Record New Entry" button as Period has been removed
     container.innerHTML += `<div class="dashboard-grid"><div class="card card-full"><h3>Seven Day Averages</h3><div class="dashboard-averages-wrapper"><div class="card ${bpStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Blood Pressure</h4>${bpHtml}</div><div class="card ${pulseStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Pulse Rate</h4>${pulseHtml}</div><div class="card ${oxyStat.border}" style="flex: 1; min-width: 200px; padding: 20px;"><h4>Oxygen Level</h4>${oxyHtml}</div></div></div><div class="card"><h3>Quick Actions</h3><button class="btn-primary" ${actionDisabled} onclick="navigate('entry')">Record New Entry</button></div><div class="card" style="padding-bottom: 15px;"><h3>Readings From Past 24 Hours</h3>${recentTableHtml}</div></div>`;
 }
 
@@ -348,7 +343,6 @@ function renderEntry(container, editId = null) {
 }
 
 async function saveEntry() {
-    // Blank string sent for period to remain backwards-compatible with API
     const payload = { reading_id: editingReadingId, date: document.getElementById('entryDate').value, time: document.getElementById('entryTime').value, period: '', sys: document.getElementById('sys')?.value || null, dia: document.getElementById('dia')?.value || null, pulse: document.getElementById('pulse')?.value || null, oxygen: document.getElementById('oxy')?.value || null, notes: document.getElementById('notes').value };
     const action = editingReadingId ? 'update_reading' : 'save_reading';
     const res = await apiCall(action, payload);
@@ -361,19 +355,15 @@ async function saveEntry() {
 
 async function deleteEntry(id) {
     showConfirmModal('Delete Reading', 'Are you sure you want to delete this reading?', async () => {
-        // Optimistically remove from view for instant feedback
         currentReadings = currentReadings.filter(r => r.id != id);
         if (document.getElementById('historyTableBody')) {
             updateHistoryView();
         }
-
         const res = await apiCall('delete_reading', { reading_id: id });
         if(res.success) { 
-            // Refresh full array silently in the background
             await fetchReadings(); 
             if (document.getElementById('historyTableBody')) updateHistoryView(); 
         } else {
-            // Rollback if there was a server error
             await fetchReadings();
             if (document.getElementById('historyTableBody')) updateHistoryView();
             showModal('Error', res.message || 'Action failed.'); 
@@ -383,7 +373,6 @@ async function deleteEntry(id) {
 
 function renderHistory(container) {
     const today = new Date(); const threeMonthsAgo = new Date(); threeMonthsAgo.setMonth(today.getMonth() - 3);
-    // Added <th>Notes</th>
     container.innerHTML += `<div class="card"><h3>Historical Graph</h3><div style="display:flex; gap:10px; margin-bottom: 20px; flex-wrap: wrap;"><div style="flex:1"><label>Start Date</label><input type="date" id="histStart" value="${threeMonthsAgo.toISOString().split('T')[0]}" onchange="updateHistoryView()"></div><div style="flex:1"><label>End Date</label><input type="date" id="histEnd" value="${today.toISOString().split('T')[0]}" onchange="updateHistoryView()"></div></div><canvas id="historyChart" style="width:100%; max-height: 350px;"></canvas></div><div class="card"><h3>Historical Results</h3><div style="overflow-x: auto;"><table class="admin-table"><thead><tr><th>Date</th><th>BP</th><th>Pulse</th><th>Oxygen</th><th>Notes</th>${!viewingSharedProfile ? '<th>Actions</th>' : ''}</tr></thead><tbody id="historyTableBody"></tbody></table></div></div>`;
     updateHistoryView();
 }
@@ -393,14 +382,11 @@ function updateHistoryView() {
     const filtered = currentReadings.filter(r => { return (!startStr || r.date >= startStr) && (!endStr || r.date <= endStr); }).reverse(); 
     const tbody = document.getElementById('historyTableBody'); tbody.innerHTML = '';
     
-    // Adjusted colspan to 6 to account for the new Notes column
     if(filtered.length === 0) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">No readings found for this period.</td></tr>`;
     
     [...filtered].reverse().forEach(r => {
         const bp = getBPStatus(r.sys, r.dia); const pu = getPulseStatus(r.pulse); const ox = getOxygenStatus(r.oxygen);
         const actionHtml = !viewingSharedProfile ? `<td><button class="btn-primary" onclick="navigate('entry', {editId: ${escapeHTML(r.id)}})" style="padding: 6px 12px; font-size: 0.9rem; width: auto; margin-right: 5px; margin-bottom: 5px; display: inline-block;">Edit</button><button class="btn-primary" onclick="deleteEntry(${escapeHTML(r.id)})" style="padding: 6px 12px; font-size: 0.9rem; width: auto; margin-bottom: 5px; display: inline-block; background-color: var(--status-very-high); box-shadow: none;">Delete</button></td>` : '';
-        
-        // Added Notes Cell
         tbody.innerHTML += `<tr><td>${formatDate(r.date)}<br><small>${escapeHTML(r.time)}</small></td><td>${r.sys ? `${escapeHTML(r.sys)}/${escapeHTML(r.dia)} <br><span class="${bp.class}">(${bp.text})</span>` : '-'}</td><td>${r.pulse ? `${escapeHTML(r.pulse)} <br><span class="${pu.class}">(${pu.text})</span>` : '-'}</td><td>${r.oxygen ? `${escapeHTML(r.oxygen)}% <br><span class="${ox.class}">(${ox.text})</span>` : '-'}</td><td>${escapeHTML(r.notes) || '-'}</td>${actionHtml}</tr>`;
     });
     
@@ -427,7 +413,8 @@ function renderReport(container) {
                 <label style="font-weight:normal"><input type="checkbox" id="incOxy" checked> Oxygen</label>
             </div>
             
-            <button class="btn-primary" onclick="generatePDF()">Download PDF Report</button>
+            <button class="btn-primary" onclick="generatePDF('share')">Email / Share PDF Report</button>
+            <button class="btn-primary" style="background: var(--text-muted);" onclick="generatePDF('download')">Download PDF Report</button>
             <button class="btn-primary" style="background: var(--text-muted);" onclick="generateCSV()">Export to CSV</button>
             <canvas id="pdfHiddenChart" width="800" height="400" class="hidden"></canvas>
         </div>
@@ -453,7 +440,8 @@ function renderReport(container) {
     `;
 }
 
-function generatePDF() {
+// Updated to accept an action parameter ('download' or 'share')
+function generatePDF(action = 'download') {
     const startStr = document.getElementById('repStart').value; const endStr = document.getElementById('repEnd').value;
     const incBP = document.getElementById('incBP').checked; const incPulse = document.getElementById('incPulse').checked; const incOxy = document.getElementById('incOxy').checked;
     if(!incBP && !incPulse && !incOxy) return showModal('Notice', 'Please select at least one data type to include.');
@@ -474,7 +462,6 @@ function generatePDF() {
         doc.setFontSize(16); doc.text("Patient Report", 14, 20); doc.setFontSize(10); doc.text(`Name: ${patientName}`, 14, 30); doc.text(`Date of Birth: ${patientDob}`, 14, 35);
         doc.addImage(chartImg, 'PNG', 14, 45, 180, 80);
         
-        // Appended Notes column header dynamically
         const tableHead = [['Date', 'Time']]; 
         if(incBP) tableHead[0].push('Blood Pressure'); 
         if(incPulse) tableHead[0].push('Pulse'); 
@@ -486,7 +473,6 @@ function generatePDF() {
             if(incBP) { const s = getBPStatus(r.sys, r.dia); row.push(r.sys ? `${r.sys}/${r.dia}\n(${s.text})` : '-'); }
             if(incPulse) { const s = getPulseStatus(r.pulse); row.push(r.pulse ? `${r.pulse}\n(${s.text})` : '-'); }
             if(incOxy) { const s = getOxygenStatus(r.oxygen); row.push(r.oxygen ? `${r.oxygen}%\n(${s.text})` : '-'); }
-            // Appended Notes info per row dynamically
             row.push(r.notes ? r.notes : '-');
             return row;
         });
@@ -496,7 +482,6 @@ function generatePDF() {
             didParseCell: function(data) { 
                 if(data.section === 'body' && data.column.index > 1) { 
                     const rawStr = String(data.cell.raw);
-                    // Isolate Status Formatting strictly to vital signs (ignores the Notes column)
                     if(rawStr.includes('\n(')) {
                         data.cell.customText = rawStr; 
                         const lines = rawStr.split('\n'); 
@@ -553,7 +538,33 @@ function generatePDF() {
         });
 
         const pageCount = doc.internal.getNumberOfPages(); for (let i = 1; i <= pageCount; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(100); doc.setFont("helvetica", "normal"); doc.text(`Page ${i}`, 14, doc.internal.pageSize.height - 10); doc.text(`Patient Name: ${patientName} | Date of Birth: ${patientDob}`, doc.internal.pageSize.width - 14, doc.internal.pageSize.height - 10, { align: 'right' }); }
-        doc.save(`Patient_Report_${patientName.replace(/\s+/g, '_')}.pdf`);
+        
+        const fileName = `Patient_Report_${patientName.replace(/\s+/g, '_')}.pdf`;
+        
+        // Native Share vs Download Logic
+        if (action === 'share') {
+            const pdfBlob = doc.output('blob');
+            const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+            
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                // Pre-copy the email to clipboard for easy pasting
+                if (currentUser?.email) {
+                    navigator.clipboard.writeText(currentUser.email).catch(() => {});
+                }
+                setTimeout(() => {
+                    navigator.share({
+                        files: [file],
+                        title: 'Health Report',
+                        text: `Attached is the health report for ${patientName}.`
+                    }).catch(e => console.log('Share canceled or failed:', e));
+                }, 200); // Small delay to let clipboard action finish
+            } else {
+                showModal('Notice', 'File sharing is not supported on this browser or device. The file will be downloaded instead.');
+                doc.save(fileName);
+            }
+        } else {
+            doc.save(fileName);
+        }
     }, 500); 
 }
 
@@ -569,13 +580,62 @@ async function renderSettings(container) {
     if(viewingSharedProfile) { container.innerHTML = "<h3>Cannot access settings while viewing shared data.</h3>"; return; }
     const savedCode = localStorage.getItem('vitalTrackSharedCode') || '';
     let adminHtml = ''; if (currentUser?.role === 'admin') { adminHtml = `<div class="card"><h3>Admin Panel</h3><div class="admin-grid" style="margin-bottom: 30px;"><div class="admin-form"><h4 style="margin-bottom:15px;">Add New User</h4><input type="text" id="newUsername" placeholder="Username" style="margin-bottom:10px;"><input type="password" id="newPassword" placeholder="Password" style="margin-bottom:10px;"><select id="newRole" style="margin-bottom:10px;"><option value="user">User</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select><button class="btn-primary" style="margin-bottom:0;" onclick="adminAddUser()">Add User</button></div><div class="admin-form"><h4 style="margin-bottom:15px;">Reset User Password</h4><select id="resetUserId" style="margin-bottom:10px;"><option value="">Select User...</option></select><input type="password" id="resetPassword" placeholder="New Password" style="margin-bottom:10px;"><button class="btn-primary" style="background: var(--text-muted); margin-bottom:0;" onclick="adminResetPassword()">Reset Password</button></div></div><h4 style="margin-bottom: 10px;">Manage Existing Users</h4><div style="overflow-x:auto;"><table class="admin-table"><thead><tr><th>User</th><th>Role</th><th>Action</th></tr></thead><tbody id="adminUserList"><tr><td colspan="3">Loading...</td></tr></tbody></table></div></div>`; }
-    container.innerHTML += `${adminHtml}<div class="card"><h3>Profile</h3><label>Full Name</label> <input type="text" id="profName" value="${escapeHTML(currentUser?.name || '')}"><label>Date of Birth (DD/MM/YYYY)</label> <input type="text" id="profDOB" placeholder="DD/MM/YYYY" value="${escapeHTML(currentUser?.dob || '')}"><button class="btn-primary" onclick="saveProfile()">Save Profile</button></div><div class="card"><h3>Share Data</h3><label>Your Share Code (Give to someone to view your data)</label><div style="display:flex; gap:10px; margin-bottom: 25px; flex-wrap: wrap;"><input type="text" id="myShareCode" value="${escapeHTML(currentUser?.share_code || 'No code generated')}" readonly style="margin-bottom:0; flex: 1; min-width: 150px;"><button class="btn-primary" style="width: auto; margin-bottom:0;" onclick="copyShareCode()">Copy Code</button><button class="btn-primary" style="width: auto; margin-bottom:0; background: var(--text-muted);" onclick="genShareCode()">${currentUser?.share_code ? 'Regenerate (Revoke Old)' : 'Generate Code'}</button></div><label>View Another User's Data</label><p style="font-size:0.85em; color:var(--text-muted);">Enter their code to view their dashboard. This will be saved so you don't have to re-enter it.</p><div style="display:flex; gap:10px;"><input type="text" id="viewShareCode" placeholder="Enter 10-char code" value="${escapeHTML(savedCode)}" style="margin-bottom:0; text-transform: uppercase;"><button class="btn-primary" style="width: auto; margin-bottom:0;" onclick="saveAndLoadSharedCode()">Save & View</button></div></div><div class="card"><h3>Backup & Restore</h3><button class="btn-primary" onclick="downloadJSON()">Download JSON Backup</button><input type="file" id="jsonUpload" accept=".json" class="hidden" onchange="uploadJSON(event)"><button class="btn-primary" style="background: var(--text-muted);" onclick="document.getElementById('jsonUpload').click()">Upload JSON to Restore</button></div>`;
+    
+    // Added Email Address Field to Profile
+    container.innerHTML += `${adminHtml}
+        <div class="card">
+            <h3>Profile</h3>
+            <label>Full Name</label> 
+            <input type="text" id="profName" value="${escapeHTML(currentUser?.name || '')}">
+            <label>Date of Birth (DD/MM/YYYY)</label> 
+            <input type="text" id="profDOB" placeholder="DD/MM/YYYY" value="${escapeHTML(currentUser?.dob || '')}">
+            <label>Email Address</label> 
+            <input type="email" id="profEmail" placeholder="yourdoctor@email.com" value="${escapeHTML(currentUser?.email || '')}">
+            <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
+        </div>
+        <div class="card">
+            <h3>Share Data</h3>
+            <label>Your Share Code (Give to someone to view your data)</label>
+            <div style="display:flex; gap:10px; margin-bottom: 25px; flex-wrap: wrap;">
+                <input type="text" id="myShareCode" value="${escapeHTML(currentUser?.share_code || 'No code generated')}" readonly style="margin-bottom:0; flex: 1; min-width: 150px;">
+                <button class="btn-primary" style="width: auto; margin-bottom:0;" onclick="copyShareCode()">Copy Code</button>
+                <button class="btn-primary" style="width: auto; margin-bottom:0; background: var(--text-muted);" onclick="genShareCode()">${currentUser?.share_code ? 'Regenerate (Revoke Old)' : 'Generate Code'}</button>
+            </div>
+            <label>View Another User's Data</label>
+            <p style="font-size:0.85em; color:var(--text-muted);">Enter their code to view their dashboard. This will be saved so you don't have to re-enter it.</p>
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="viewShareCode" placeholder="Enter 10-char code" value="${escapeHTML(savedCode)}" style="margin-bottom:0; text-transform: uppercase;">
+                <button class="btn-primary" style="width: auto; margin-bottom:0;" onclick="saveAndLoadSharedCode()">Save & View</button>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Backup & Restore</h3>
+            <button class="btn-primary" onclick="downloadJSON()">Download JSON Backup</button>
+            <input type="file" id="jsonUpload" accept=".json" class="hidden" onchange="uploadJSON(event)">
+            <button class="btn-primary" style="background: var(--text-muted);" onclick="document.getElementById('jsonUpload').click()">Upload JSON to Restore</button>
+        </div>`;
     if (currentUser?.role === 'admin') loadAdminUsers();
 }
 
 async function saveAndLoadSharedCode() { const code = document.getElementById('viewShareCode').value.trim().toUpperCase(); if(code) loadSharedUser(code); }
 function copyShareCode() { const code = document.getElementById('myShareCode').value; if (!code || code === 'No code generated') return showModal('Error', 'No code generated yet.'); navigator.clipboard.writeText(code).then(() => { showModal('Success', 'Share code copied to clipboard!'); }); }
-async function saveProfile() { const name = document.getElementById('profName').value; const dob = document.getElementById('profDOB').value; const res = await apiCall('update_profile', { name, dob }); if (res.success) { currentUser.name = name; currentUser.dob = dob; showModal('Success', 'Profile updated.'); } else { showModal('Error', res.message || 'Action failed.'); } }
+
+// Updated to also save the new email field
+async function saveProfile() { 
+    const name = document.getElementById('profName').value; 
+    const dob = document.getElementById('profDOB').value; 
+    const email = document.getElementById('profEmail').value; 
+    
+    const res = await apiCall('update_profile', { name, dob, email }); 
+    if (res.success) { 
+        currentUser.name = name; 
+        currentUser.dob = dob; 
+        currentUser.email = email; 
+        showModal('Success', 'Profile updated.'); 
+    } else { 
+        showModal('Error', res.message || 'Action failed.'); 
+    } 
+}
 
 async function genShareCode() { 
     const doGen = async () => {
