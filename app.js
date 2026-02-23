@@ -172,7 +172,6 @@ function navigate(view, params = {}) {
     const content = document.getElementById('appContent');
     content.innerHTML = ''; 
 
-    // Forcefully remove any underlines using !important to override mobile browser defaults
     document.querySelectorAll('.nav-center button').forEach(btn => {
         if (btn.getAttribute('onclick').includes(`('${view}'`)) {
             btn.style.backgroundColor = 'rgba(128, 128, 128, 0.2)';
@@ -413,7 +412,8 @@ function renderReport(container) {
                 <label style="font-weight:normal"><input type="checkbox" id="incOxy" checked> Oxygen</label>
             </div>
             
-            <button class="btn-primary" onclick="generatePDF('share')">Email / Share PDF Report</button>
+            <button class="btn-primary" onclick="triggerEmailReport()">Send PDF to My Email</button>
+            <button class="btn-primary" style="background: var(--text-muted);" onclick="generatePDF('share')">Email / Share PDF Report</button>
             <button class="btn-primary" style="background: var(--text-muted);" onclick="generatePDF('download')">Download PDF Report</button>
             <button class="btn-primary" style="background: var(--text-muted);" onclick="generateCSV()">Export to CSV</button>
             <canvas id="pdfHiddenChart" width="800" height="400" class="hidden"></canvas>
@@ -440,7 +440,19 @@ function renderReport(container) {
     `;
 }
 
-// Updated to accept an action parameter ('download' or 'share')
+// Wrapper to check for email address and show the spam warning before generating
+window.triggerEmailReport = function() {
+    const email = viewingSharedProfile ? viewingSharedProfile.email : currentUser.email;
+    
+    if (!email) {
+        return showModal('Email Required', 'Please add and save an email address in the Profile section on the Settings page first.');
+    }
+    
+    showConfirmModal('Send Email Report', `This will email the PDF report directly to:\n\n${escapeHTML(email)}\n\nNote: As this is an automated message, it may go into your spam or junk folder. Please check there if you don't receive it in your inbox shortly.`, () => {
+        generatePDF('email');
+    });
+};
+
 function generatePDF(action = 'download') {
     const startStr = document.getElementById('repStart').value; const endStr = document.getElementById('repEnd').value;
     const incBP = document.getElementById('incBP').checked; const incPulse = document.getElementById('incPulse').checked; const incOxy = document.getElementById('incOxy').checked;
@@ -541,23 +553,28 @@ function generatePDF(action = 'download') {
         
         const fileName = `Patient_Report_${patientName.replace(/\s+/g, '_')}.pdf`;
         
-        // Native Share vs Download Logic
-        if (action === 'share') {
+        if (action === 'email') {
+            const pdfDataUri = doc.output('datauristring');
+            showModal('Sending...', 'Please wait while your report is being emailed...');
+            
+            apiCall('email_report', { pdf_data: pdfDataUri }).then(res => {
+                if(res.success) {
+                    showModal('Email Sent', 'Your report has been successfully sent. Please check your spam or junk folder if it does not appear in your inbox shortly.');
+                } else {
+                    showModal('Error', res.message || 'There was an error sending the email.');
+                }
+            });
+        } else if (action === 'share') {
             const pdfBlob = doc.output('blob');
             const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
             
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                // Pre-copy the email to clipboard for easy pasting
-                if (currentUser?.email) {
-                    navigator.clipboard.writeText(currentUser.email).catch(() => {});
-                }
+                if (currentUser?.email) navigator.clipboard.writeText(currentUser.email).catch(() => {});
                 setTimeout(() => {
                     navigator.share({
-                        files: [file],
-                        title: 'Health Report',
-                        text: `Attached is the health report for ${patientName}.`
+                        files: [file], title: 'Health Report', text: `Attached is the health report for ${patientName}.`
                     }).catch(e => console.log('Share canceled or failed:', e));
-                }, 200); // Small delay to let clipboard action finish
+                }, 200); 
             } else {
                 showModal('Notice', 'File sharing is not supported on this browser or device. The file will be downloaded instead.');
                 doc.save(fileName);
@@ -581,7 +598,7 @@ async function renderSettings(container) {
     const savedCode = localStorage.getItem('vitalTrackSharedCode') || '';
     let adminHtml = ''; if (currentUser?.role === 'admin') { adminHtml = `<div class="card"><h3>Admin Panel</h3><div class="admin-grid" style="margin-bottom: 30px;"><div class="admin-form"><h4 style="margin-bottom:15px;">Add New User</h4><input type="text" id="newUsername" placeholder="Username" style="margin-bottom:10px;"><input type="password" id="newPassword" placeholder="Password" style="margin-bottom:10px;"><select id="newRole" style="margin-bottom:10px;"><option value="user">User</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select><button class="btn-primary" style="margin-bottom:0;" onclick="adminAddUser()">Add User</button></div><div class="admin-form"><h4 style="margin-bottom:15px;">Reset User Password</h4><select id="resetUserId" style="margin-bottom:10px;"><option value="">Select User...</option></select><input type="password" id="resetPassword" placeholder="New Password" style="margin-bottom:10px;"><button class="btn-primary" style="background: var(--text-muted); margin-bottom:0;" onclick="adminResetPassword()">Reset Password</button></div></div><h4 style="margin-bottom: 10px;">Manage Existing Users</h4><div style="overflow-x:auto;"><table class="admin-table"><thead><tr><th>User</th><th>Role</th><th>Action</th></tr></thead><tbody id="adminUserList"><tr><td colspan="3">Loading...</td></tr></tbody></table></div></div>`; }
     
-    // Added Email Address Field to Profile
+    // Changed type to "text" so it guarantees it picks up your existing input box styling
     container.innerHTML += `${adminHtml}
         <div class="card">
             <h3>Profile</h3>
@@ -590,7 +607,7 @@ async function renderSettings(container) {
             <label>Date of Birth (DD/MM/YYYY)</label> 
             <input type="text" id="profDOB" placeholder="DD/MM/YYYY" value="${escapeHTML(currentUser?.dob || '')}">
             <label>Email Address</label> 
-            <input type="email" id="profEmail" placeholder="yourdoctor@email.com" value="${escapeHTML(currentUser?.email || '')}">
+            <input type="text" id="profEmail" placeholder="yourdoctor@email.com" value="${escapeHTML(currentUser?.email || '')}">
             <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
         </div>
         <div class="card">
@@ -599,7 +616,7 @@ async function renderSettings(container) {
             <div style="display:flex; gap:10px; margin-bottom: 25px; flex-wrap: wrap;">
                 <input type="text" id="myShareCode" value="${escapeHTML(currentUser?.share_code || 'No code generated')}" readonly style="margin-bottom:0; flex: 1; min-width: 150px;">
                 <button class="btn-primary" style="width: auto; margin-bottom:0;" onclick="copyShareCode()">Copy Code</button>
-                <button class="btn-primary" style="width: auto; margin-bottom:0; background: var(--text-muted);" onclick="genShareCode()">${currentUser?.share_code ? 'Regenerate (Revoke Old)' : 'Generate Code'}</button>
+                <button class="btn-primary" style="width: auto; margin-bottom:0; background: var(--text-muted);" onclick="genShareCode()">${currentUser?.share_code ? 'Regenerate Code' : 'Generate Code'}</button>
             </div>
             <label>View Another User's Data</label>
             <p style="font-size:0.85em; color:var(--text-muted);">Enter their code to view their dashboard. This will be saved so you don't have to re-enter it.</p>
@@ -620,7 +637,6 @@ async function renderSettings(container) {
 async function saveAndLoadSharedCode() { const code = document.getElementById('viewShareCode').value.trim().toUpperCase(); if(code) loadSharedUser(code); }
 function copyShareCode() { const code = document.getElementById('myShareCode').value; if (!code || code === 'No code generated') return showModal('Error', 'No code generated yet.'); navigator.clipboard.writeText(code).then(() => { showModal('Success', 'Share code copied to clipboard!'); }); }
 
-// Updated to also save the new email field
 async function saveProfile() { 
     const name = document.getElementById('profName').value; 
     const dob = document.getElementById('profDOB').value; 
