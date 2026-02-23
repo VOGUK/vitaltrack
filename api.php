@@ -20,7 +20,6 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // Auto-install database tables
 if ($is_new_db) {
-    // Added 'email TEXT' to the users table creation
     $pdo->exec("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, role TEXT, name TEXT, dob TEXT, email TEXT, share_code TEXT)");
     $pdo->exec("CREATE TABLE readings (id INTEGER PRIMARY KEY, user_id INTEGER, date TEXT, time TEXT, period TEXT, sys INTEGER, dia INTEGER, pulse INTEGER, oxygen INTEGER, notes TEXT)");
     
@@ -31,7 +30,7 @@ if ($is_new_db) {
     try {
         $pdo->exec("ALTER TABLE users ADD COLUMN email TEXT");
     } catch (PDOException $e) {
-        // If the column already exists, SQLite throws an error. We silently ignore it.
+        // Silently ignore if the column already exists
     }
 }
 
@@ -67,7 +66,6 @@ try {
         if ($user && password_verify($password, $user['password'])) {
             session_regenerate_id(true); 
             
-            // Handle "Stay signed in"
             if (isset($data['remember']) && $data['remember'] == true) {
                 setcookie(session_name(), session_id(), time() + (30 * 24 * 60 * 60), "/");
             }
@@ -83,7 +81,6 @@ try {
     } 
     elseif ($action == 'check_auth') {
         if (isset($_SESSION['user_id'])) {
-            // Added 'email' to the returned fields
             $stmt = $pdo->prepare("SELECT id, username, role, name, dob, email, share_code FROM users WHERE id = ?");
             $stmt->execute([$_SESSION['user_id']]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -131,7 +128,6 @@ try {
     // --- 3. Profile & Sharing ---
     elseif ($action == 'update_profile') {
         requireAuth();
-        // Added email to the update statement
         $stmt = $pdo->prepare("UPDATE users SET name = ?, dob = ?, email = ? WHERE id = ?");
         $stmt->execute([$data['name'], $data['dob'], $data['email'], $_SESSION['user_id']]);
         echo json_encode(['success' => true]);
@@ -145,7 +141,6 @@ try {
     }
     elseif ($action == 'get_shared_data') {
         requireAuth();
-        // Added email so the frontend knows the shared user's email too
         $stmt = $pdo->prepare("SELECT id, name, dob, email FROM users WHERE share_code = ?");
         $stmt->execute([$data['share_code']]);
         $shared_user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -228,10 +223,18 @@ try {
             exit;
         }
 
-        // Clean and decode the base64 string
-        $pdf_decoded = base64_decode(preg_replace('#^data:application/\w+;base64,#i', '', $pdf_data));
+        // Fix: Robustly strip the data URI header before decoding
+        if (strpos($pdf_data, ',') !== false) {
+            $pdf_data = substr($pdf_data, strpos($pdf_data, ',') + 1);
+        }
+        $pdf_decoded = base64_decode($pdf_data);
 
-        // Ensure PHPMailer files exist in the 'src' folder before attempting to load them
+        // Final safety check to ensure decoding didn't fail
+        if ($pdf_decoded === false) {
+            echo json_encode(['success' => false, 'message' => 'Failed to process the PDF data on the server.']);
+            exit;
+        }
+
         if (!file_exists(__DIR__ . '/src/PHPMailer.php') || !file_exists(__DIR__ . '/src/Exception.php')) {
             echo json_encode(['success' => false, 'message' => 'PHPMailer library is missing. Please ensure the PHPMailer files are inside the "src" folder on your server.']);
             exit;
@@ -243,7 +246,6 @@ try {
         $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
 
         try {
-            // Using the native PHP mail() engine automatically
             $host = $_SERVER['HTTP_HOST'] ?? 'vitaltrack.local';
             $mail->setFrom('no-reply@' . $host, 'VitalTrack App');
             $mail->addAddress($user['email'], $user['name']);
@@ -251,7 +253,7 @@ try {
             $mail->Subject = 'Your Health Report';
             $mail->Body    = "Hello,\n\nPlease find your generated health report attached to this email.\n\nNote: This is an automated email.\n\nBest regards,\nVitalTrack App";
             
-            // Attach the PDF from memory
+            // Attach the clean PDF from memory
             $mail->addStringAttachment($pdf_decoded, 'Patient_Report.pdf', 'base64', 'application/pdf');
 
             $mail->send();
