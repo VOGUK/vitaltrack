@@ -231,14 +231,14 @@ try {
         // Clean and decode the base64 string
         $pdf_decoded = base64_decode(preg_replace('#^data:application/\w+;base64,#i', '', $pdf_data));
 
-        // Ensure PHPMailer files exist before attempting to load them
-        if (!file_exists(__DIR__ . '/PHPMailer/src/PHPMailer.php') || !file_exists(__DIR__ . '/PHPMailer/src/Exception.php')) {
-            echo json_encode(['success' => false, 'message' => 'PHPMailer library is missing. Please upload the PHPMailer folder to your server.']);
+        // Ensure PHPMailer files exist in the 'src' folder before attempting to load them
+        if (!file_exists(__DIR__ . '/src/PHPMailer.php') || !file_exists(__DIR__ . '/src/Exception.php')) {
+            echo json_encode(['success' => false, 'message' => 'PHPMailer library is missing. Please ensure the PHPMailer files are inside the "src" folder on your server.']);
             exit;
         }
 
-        require_once __DIR__ . '/PHPMailer/src/Exception.php';
-        require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
+        require_once __DIR__ . '/src/Exception.php';
+        require_once __DIR__ . '/src/PHPMailer.php';
 
         $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
 
