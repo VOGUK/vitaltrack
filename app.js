@@ -405,6 +405,12 @@ function renderReport(container) {
                 <div style="flex:1"><label>End Date</label><input type="date" id="repEnd" value="${today}"></div>
             </div>
             
+            <label>Report Sorting</label>
+            <select id="repSort" style="margin-bottom: 20px;">
+                <option value="desc">Newest First (Descending)</option>
+                <option value="asc">Oldest First (Ascending)</option>
+            </select>
+            
             <label>Include Data in PDF</label>
             <div style="margin-bottom: 25px; display:flex; gap: 15px;">
                 <label style="font-weight:normal"><input type="checkbox" id="incBP" checked> Blood Pressure</label>
@@ -440,7 +446,6 @@ function renderReport(container) {
     `;
 }
 
-// Wrapper to check for email address and show the spam warning before generating
 window.triggerEmailReport = function() {
     const email = viewingSharedProfile ? viewingSharedProfile.email : currentUser.email;
     
@@ -455,18 +460,25 @@ window.triggerEmailReport = function() {
 
 function generatePDF(action = 'download') {
     const startStr = document.getElementById('repStart').value; const endStr = document.getElementById('repEnd').value;
+    const sortOrder = document.getElementById('repSort').value;
     const incBP = document.getElementById('incBP').checked; const incPulse = document.getElementById('incPulse').checked; const incOxy = document.getElementById('incOxy').checked;
+    
     if(!incBP && !incPulse && !incOxy) return showModal('Notice', 'Please select at least one data type to include.');
+    
+    // Default currentReadings comes in from DB as Newest First. filtered is reversed to Oldest First (Ascending) for the Chart.
     const filtered = currentReadings.filter(r => { return (!startStr || r.date >= startStr) && (!endStr || r.date <= endStr); }).reverse();
     if(filtered.length === 0) return showModal('Notice', 'No data found for selected period.');
+    
     const targetProfile = viewingSharedProfile || currentUser;
     const patientName = escapeHTML(targetProfile.name) || 'Unknown Patient'; let patientDob = escapeHTML(targetProfile.dob) || 'DD/MM/YYYY';
     if(pdfChartInstance) pdfChartInstance.destroy();
+    
     const ctx = document.getElementById('pdfHiddenChart').getContext('2d'); ctx.clearRect(0, 0, 800, 400);
     const chartDatasets = [];
     if(incBP) { chartDatasets.push({ label: 'Systolic', data: filtered.map(r=>r.sys || null), borderColor: '#ef4444', backgroundColor: 'transparent', spanGaps: true }); chartDatasets.push({ label: 'Diastolic', data: filtered.map(r=>r.dia || null), borderColor: '#f87171', backgroundColor: 'transparent', spanGaps: true }); }
     if(incPulse) chartDatasets.push({ label: 'Pulse', data: filtered.map(r=>r.pulse || null), borderColor: '#16a34a', backgroundColor: 'transparent', spanGaps: true });
     if(incOxy) chartDatasets.push({ label: 'Oxygen', data: filtered.map(r=>r.oxygen || null), borderColor: '#3b82f6', backgroundColor: 'transparent', spanGaps: true });
+    
     pdfChartInstance = new Chart(ctx, { type: 'line', data: { labels: filtered.map(r => formatDate(r.date)), datasets: chartDatasets }, options: { responsive: false, animation: false } });
     
     setTimeout(() => {
@@ -480,7 +492,13 @@ function generatePDF(action = 'download') {
         if(incOxy) tableHead[0].push('Oxygen');
         tableHead[0].push('Notes');
 
-        const tableBody = [...filtered].reverse().map(r => {
+        // Prepare the data order based on user selection
+        let pdfTableData = [...filtered]; 
+        if (sortOrder === 'desc') {
+            pdfTableData.reverse(); // Flip it to Newest First if selected
+        }
+
+        const tableBody = pdfTableData.map(r => {
             const row = [formatDate(r.date), r.time];
             if(incBP) { const s = getBPStatus(r.sys, r.dia); row.push(r.sys ? `${r.sys}/${r.dia}\n(${s.text})` : '-'); }
             if(incPulse) { const s = getPulseStatus(r.pulse); row.push(r.pulse ? `${r.pulse}\n(${s.text})` : '-'); }
@@ -598,7 +616,6 @@ async function renderSettings(container) {
     const savedCode = localStorage.getItem('vitalTrackSharedCode') || '';
     let adminHtml = ''; if (currentUser?.role === 'admin') { adminHtml = `<div class="card"><h3>Admin Panel</h3><div class="admin-grid" style="margin-bottom: 30px;"><div class="admin-form"><h4 style="margin-bottom:15px;">Add New User</h4><input type="text" id="newUsername" placeholder="Username" style="margin-bottom:10px;"><input type="password" id="newPassword" placeholder="Password" style="margin-bottom:10px;"><select id="newRole" style="margin-bottom:10px;"><option value="user">User</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select><button class="btn-primary" style="margin-bottom:0;" onclick="adminAddUser()">Add User</button></div><div class="admin-form"><h4 style="margin-bottom:15px;">Reset User Password</h4><select id="resetUserId" style="margin-bottom:10px;"><option value="">Select User...</option></select><input type="password" id="resetPassword" placeholder="New Password" style="margin-bottom:10px;"><button class="btn-primary" style="background: var(--text-muted); margin-bottom:0;" onclick="adminResetPassword()">Reset Password</button></div></div><h4 style="margin-bottom: 10px;">Manage Existing Users</h4><div style="overflow-x:auto;"><table class="admin-table"><thead><tr><th>User</th><th>Role</th><th>Action</th></tr></thead><tbody id="adminUserList"><tr><td colspan="3">Loading...</td></tr></tbody></table></div></div>`; }
     
-    // Changed type to "text" so it guarantees it picks up your existing input box styling
     container.innerHTML += `${adminHtml}
         <div class="card">
             <h3>Profile</h3>
